@@ -1,0 +1,29 @@
+{
+  "name": "Gemini Forms Helper",
+  "version": "1.0",
+  "description": "AI-powered Google Forms assistant that helps identify correct answers",
+  "manifest_version": 3,
+  "permissions": ["activeTab", "scripting", "storage", "tabs"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://docs.google.com/forms/*"],
+      "js": ["content.js"],
+      "css": ["styles.css"]
+    }
+  ],
+  "host_permissions": [
+    "https://docs.google.com/forms/*",
+    "https://generativelanguage.googleapis.com/*"
+  ]
+}

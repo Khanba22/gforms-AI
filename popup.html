@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Gemini Forms Helper</title>
+  <style>
+    body {
+      width: 300px;
+      padding: 15px;
+      font-family: 'Google Sans', Arial, sans-serif;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+    .logo {
+      width: 24px;
+      height: 24px;
+      margin-right: 10px;
+    }
+    h1 {
+      font-size: 18px;
+      margin: 0;
+      color: #444;
+    }
+    .api-key-container {
+      margin-bottom: 15px;
+    }
+    input {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      margin-top: 5px;
+      box-sizing: border-box;
+    }
+    button {
+      background-color: #8e24aa;
+      color: white;
+      border: none;
+      padding: 10px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      width: 100%;
+      font-weight: 500;
+    }
+    button:hover {
+      background-color: #7b1fa2;
+    }
+    .status {
+      margin-top: 15px;
+      padding: 10px;
+      border-radius: 4px;
+      font-size: 14px;
+      display: none;
+    }
+    .success {
+      background-color: #e8f5e9;
+      color: #2e7d32;
+    }
+    .error {
+      background-color: #ffebee;
+      color: #c62828;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <img src="images/icon48.png" class="logo" alt="Logo">
+    <h1>Gemini Forms Helper</h1>
+  </div>
+  
+  <div class="api-key-container">
+    <label for="api-key">Gemini API Key:</label>
+    <input type="password" id="api-key" placeholder="Enter your Gemini API key">
+  </div>
+  
+  <button id="analyze-form">Analyze Form & Mark Answers</button>
+  
+  <div id="status" class="status"></div>
+  
+  <script src="popup.js"></script>
+</body>
+</html>
