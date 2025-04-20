@@ -358,7 +358,7 @@
     overlay.style.left = "0";
     overlay.style.width = "100%";
     overlay.style.height = "100%";
-    overlay.style.backgroundColor = "rgba(142, 36, 170, 0.2)";
+    overlay.style.backgroundColor = "rgba(240 235 248 0.4)";
     overlay.style.borderRadius = "4px";
     overlay.style.zIndex = "1";
     overlay.style.pointerEvents = "none";
@@ -369,17 +369,14 @@
     indicator.style.right = "10px";
     indicator.style.top = "50%";
     indicator.style.transform = "translateY(-50%)";
-    indicator.style.color = "#8e24aa";
-    indicator.style.fontWeight = "bold";
-    indicator.style.fontSize = "16px";
-    indicator.innerHTML = "✓";
+    indicator.style.fontSize = "12px";
+    indicator.innerHTML = "~"; // Checkmark or any other indicator
+
     indicator.style.zIndex = "2";
     indicator.style.pointerEvents = "none";
 
     // Add strong box-shadow for more visibility
-    element.style.boxShadow = "0 0 0 3px rgba(142, 36, 170, 0.7)";
     element.style.position = "relative";
-    element.style.transition = "box-shadow 0.3s ease";
 
     // Only add overlay if element doesn't already have one
     if (!element.querySelector(".gemini-answer-highlight")) {
@@ -391,17 +388,6 @@
 
     // Scroll the element into view to make it visible
     element.scrollIntoView({ behavior: "smooth", block: "center" });
-
-    // Keep the highlight visible longer and fade out gradually
-    setTimeout(() => {
-      element.style.boxShadow = "0 0 0 2px rgba(142, 36, 170, 0.4)";
-
-      // Don't remove the overlay and indicator to keep the answers marked
-      // Just make them less prominent after a while
-      if (overlay.parentNode === element) {
-        overlay.style.backgroundColor = "rgba(142, 36, 170, 0.1)";
-      }
-    }, 3000);
   }
 
   // Update UI status
