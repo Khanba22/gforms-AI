@@ -196,7 +196,7 @@
   // Analyze form with Gemini API
   async function analyzeWithGemini(formData, apiKey) {
     const endpoint =
-      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-001:generateContent";
+      "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-thinking-exp-01-21:generateContent";
 
     // Format the questions for the prompt
     const formattedQuestions = formData.questions
