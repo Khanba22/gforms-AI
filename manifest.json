@@ -17,13 +17,17 @@
   },
   "content_scripts": [
     {
-      "matches": ["https://docs.google.com/forms/*"],
+      "matches": [
+        "https://docs.google.com/forms/*",
+        "https://*.coursera.org/*"
+      ],
       "js": ["content.js"],
       "css": ["styles.css"]
     }
   ],
   "host_permissions": [
     "https://docs.google.com/forms/*",
+    "https://*.coursera.org/*",
     "https://generativelanguage.googleapis.com/*"
   ]
 }

@@ -21,10 +21,63 @@
     return questions;
   }
 
+  function extractCourseraQuizContent() {
+    // Look for question blocks in Coursera quizzes
+    const questionBlocks = Array.from(document.querySelectorAll("[data-testid^='part-Submission_']"));
+    const map = {};
+    
+    questionBlocks.forEach((block, index) => {
+      // Extract question text from the CML viewer
+      const questionElement = block.querySelector(".rc-CML .css-g2bbpm");
+      if (!questionElement) return;
+      
+      const question = questionElement.textContent.trim();
+      
+      // Determine the question type
+      const isNumeric = block.getAttribute("data-testid") === "part-Submission_NumericQuestion";
+      const isMultipleChoice = !isNumeric && block.querySelector("[role='radiogroup']") !== null;
+      const isCheckbox = !isNumeric && !isMultipleChoice && block.querySelector("[role='group']") !== null;
+      
+      if (isNumeric) {
+        // For numeric questions, there are no options but we need to indicate it's a numeric type
+        map[question] = ["[NUMERIC_INPUT]"];
+      } else {
+        // Extract options based on question type
+        let options = [];
+        
+        // Multiple choice
+        if (isMultipleChoice) {
+          const radioOptions = block.querySelectorAll("[role='radiogroup'] .rc-Option");
+          radioOptions.forEach(option => {
+            const optionText = option.querySelector(".rc-CML .css-g2bbpm")?.textContent.trim();
+            if (optionText) options.push(optionText);
+          });
+        } 
+        // Checkbox
+        else if (isCheckbox) {
+          const checkboxOptions = block.querySelectorAll("[role='group'] .rc-Option");
+          checkboxOptions.forEach(option => {
+            const optionText = option.querySelector(".rc-CML .css-g2bbpm")?.textContent.trim();
+            if (optionText) options.push(optionText);
+          });
+        }
+        
+        if (options.length > 0) {
+          map[question] = options;
+        }
+      }
+    });
+    
+    return map;
+  }
+
   chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === "analyzeForm") {
       const formContent = extractFormContent();
       sendResponse({ success: true, content: formContent });
+    } else if (request.action === "analyzeCourseraQuiz") {
+      const quizContent = extractCourseraQuizContent();
+      sendResponse({ success: true, content: quizContent });
     }
   });
 
@@ -349,43 +402,71 @@
     }, 500);
   }
 
-  // Add visual highlight to answered elements
-  function highlightAnswer(element) {
-    // Create a highlight overlay
-    const overlay = document.createElement("div");
-    overlay.style.position = "absolute";
-    overlay.style.top = "0";
-    overlay.style.left = "0";
-    overlay.style.width = "100%";
-    overlay.style.height = "100%";
-    overlay.style.backgroundColor = "rgba(240 235 248 0.4)";
-    overlay.style.borderRadius = "4px";
-    overlay.style.zIndex = "1";
-    overlay.style.pointerEvents = "none";
+  // Highlight a Coursera answer option
+  function highlightCourseraAnswer(element, type = "radio") {
+    // Find the input container or checkbox/radio element
+    const inputContainer = element.querySelector("span._1e7axzp") || element.querySelector("input");
+    
+    // Only apply a minimal style to the answer option
+    element.style.position = "relative";
+    
+    // Remove previous full highlighting
+    element.style.borderLeft = "";
+    element.style.backgroundColor = "";
+    element.style.borderRadius = "";
+    
+    // Add a small checkmark at the end of the option
+    const indicator = document.createElement("div");
+    indicator.textContent = "✓";
+    indicator.style.position = "absolute";
+    indicator.style.right = "10px";
+    indicator.style.top = "50%";
+    indicator.style.transform = "translateY(-50%)";
+    indicator.style.fontSize = "16px";
+    indicator.style.fontWeight = "bold";
+    indicator.style.color = "#7209b7";
+    
+    // Only add the indicator if it doesn't already exist
+    if (!element.querySelector(".gemini-answer-indicator")) {
+      indicator.classList.add("gemini-answer-indicator");
+      element.appendChild(indicator);
+    }
+    
+    // Scroll to make the element visible
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+  }
 
-    // Add a checkmark or indicator
+  // Highlight answer in Google Forms
+  function highlightAnswer(element) {
+    // Check if the element is already highlighted
+    if (element.querySelector(".gemini-answer-highlight")) {
+      return;
+    }
+    
+    // Find any input element (checkbox, radio, text input)
+    const input = element.querySelector("input") || element;
+    
+    // Add a checkmark indicator
     const indicator = document.createElement("div");
     indicator.style.position = "absolute";
     indicator.style.right = "10px";
     indicator.style.top = "50%";
     indicator.style.transform = "translateY(-50%)";
-    indicator.style.fontSize = "12px";
-    indicator.innerHTML = "~"; // Checkmark or any other indicator
-
+    indicator.style.fontSize = "14px";
+    indicator.style.fontWeight = "bold";
+    indicator.style.color = "#2e7d32";
+    indicator.innerHTML = "✓";
     indicator.style.zIndex = "2";
     indicator.style.pointerEvents = "none";
     // A random Comment
-    // Add strong box-shadow for more visibility
+    indicator.classList.add("gemini-answer-indicator");
+    
+    // Make sure the element can position the indicator
     element.style.position = "relative";
-
-    // Only add overlay if element doesn't already have one
-    if (!element.querySelector(".gemini-answer-highlight")) {
-      overlay.classList.add("gemini-answer-highlight");
-      indicator.classList.add("gemini-answer-indicator");
-      element.appendChild(overlay);
-      element.appendChild(indicator);
-    }
-
+    
+    // Add the indicator to the element
+    element.appendChild(indicator);
+    
     // Scroll the element into view to make it visible
     element.scrollIntoView({ behavior: "smooth", block: "center" });
   }
@@ -454,6 +535,172 @@
           sendResponse({ success: false, error: error.message })
         );
       return true; // Indicates async response
+    } else if (message.action === "processCourseraAnswers") {
+      processCourseraAnswers(message.answers)
+        .then(sendResponse)
+        .catch((error) =>
+          sendResponse({ success: false, error: error.message })
+        );
+      return true; // Indicates async response
     }
   });
+
+  // Process and highlight Coursera quiz answers
+  async function processCourseraAnswers(answers) {
+    // Create UI container for status
+    const uiContainer = createUI();
+    updateUIStatus(uiContainer, "Highlighting answers...");
+    updateProgress(uiContainer, 20);
+
+    try {
+      // Get all question blocks
+      const questionBlocks = Array.from(document.querySelectorAll("[data-testid^='part-Submission_']"));
+      let highlightCount = 0;
+
+      // Process each question
+      for (let i = 0; i < questionBlocks.length; i++) {
+        const block = questionBlocks[i];
+        const questionText = block.querySelector(".rc-CML .css-g2bbpm")?.textContent.trim();
+        
+        if (!questionText) continue;
+        
+        // Find the answer for this question (by question number or matching text)
+        const questionNum = i + 1;
+        const answer = answers[questionNum];
+        
+        if (!answer) continue;
+
+        // Determine question type
+        const isNumeric = block.getAttribute("data-testid") === "part-Submission_NumericQuestion";
+        const isMultipleChoice = !isNumeric && block.querySelector("[role='radiogroup']") !== null;
+        const isCheckbox = !isNumeric && !isMultipleChoice && block.querySelector("[role='group']") !== null;
+        
+        console.log(`Question ${questionNum}: Type = ${isNumeric ? 'numeric' : (isMultipleChoice ? 'multiple choice' : (isCheckbox ? 'checkbox' : 'unknown'))}, Answer = ${answer}`);
+        
+        if (isNumeric) {
+          // Handle numeric input questions
+          const input = block.querySelector("input[type='number']");
+          if (input) {
+            try {
+              // Extract the numeric value from the answer text
+              const numericValue = answer.replace(/[^0-9]/g, '');
+              
+              // Set the input value
+              input.value = numericValue;
+              
+              // Trigger input event to update form state
+              const event = new Event('input', { bubbles: true });
+              input.dispatchEvent(event);
+              
+              // Add visual indicator that this has been filled
+              const inputContainer = input.closest("._kxlijz") || input.parentElement;
+              if (inputContainer) {
+                inputContainer.style.position = "relative";
+                inputContainer.style.borderLeft = "4px solid #7209b7";
+                
+                // Add a checkmark indicator
+                const indicator = document.createElement("div");
+                indicator.textContent = "✓";
+                indicator.style.position = "absolute";
+                indicator.style.right = "10px";
+                indicator.style.top = "50%";
+                indicator.style.transform = "translateY(-50%)";
+                indicator.style.fontSize = "16px";
+                indicator.style.fontWeight = "bold";
+                indicator.style.color = "#7209b7";
+                indicator.style.zIndex = "10";
+                indicator.classList.add("gemini-answer-indicator");
+                
+                if (!inputContainer.querySelector(".gemini-answer-indicator")) {
+                  inputContainer.appendChild(indicator);
+                }
+              }
+              
+              highlightCount++;
+              console.log(`Filled numeric input with value: ${numericValue}`);
+            } catch (e) {
+              console.log("Couldn't set numeric input value:", e);
+            }
+          }
+        } else if (isMultipleChoice) {
+          // Handle multiple choice questions - existing code
+          const optionMatch = answer.match(/Option\s+(\d+)/i);
+          if (optionMatch) {
+            const optionNum = parseInt(optionMatch[1], 10) - 1;
+            const options = Array.from(block.querySelectorAll("[role='radiogroup'] .rc-Option"));
+            
+            if (options[optionNum]) {
+              const optionElement = options[optionNum];
+              
+              // Try to actually click the radio button
+              const input = optionElement.querySelector("input[type='radio']");
+              if (input) {
+                try {
+                  input.click();
+                  console.log(`Clicked radio button for option ${optionNum+1}`);
+                } catch (e) {
+                  console.log("Couldn't click radio button:", e);
+                }
+              }
+              
+              // Highlight the option
+              const label = optionElement.querySelector("label");
+              if (label) {
+                highlightCourseraAnswer(label, "radio");
+                highlightCount++;
+              }
+            }
+          }
+        } else if (isCheckbox) {
+          // Handle checkbox questions - existing code
+          const optionMatches = answer.match(/Option\s+(\d+)/gi) || [];
+          console.log(`Found ${optionMatches.length} options in answer for question ${questionNum}:`, answer);
+          
+          for (const optMatch of optionMatches) {
+            const optionNum = parseInt(optMatch.replace(/Option\s+/i, ""), 10) - 1;
+            const options = Array.from(block.querySelectorAll("[role='group'] .rc-Option"));
+            console.log(`Processing option ${optionNum+1} of ${options.length} available options`);
+            
+            if (options[optionNum]) {
+              const optionElement = options[optionNum];
+              
+              // Try to actually click the checkbox
+              const input = optionElement.querySelector("input[type='checkbox']");
+              if (input) {
+                try {
+                  input.click();
+                  console.log(`Clicked checkbox for option ${optionNum+1}`);
+                } catch (e) {
+                  console.log("Couldn't click checkbox:", e);
+                }
+              }
+              
+              // Highlight the option
+              const label = optionElement.querySelector("label");
+              if (label) {
+                highlightCourseraAnswer(label, "checkbox");
+                highlightCount++;
+              }
+            }
+          }
+        }
+      }
+
+      updateUIStatus(uiContainer, `Complete! Highlighted ${highlightCount} answers.`);
+      updateProgress(uiContainer, 100);
+      
+      // Remove UI after 5 seconds
+      setTimeout(() => {
+        uiContainer.style.opacity = "0";
+        setTimeout(() => uiContainer.remove(), 500);
+      }, 5000);
+      
+      return { success: true, highlightCount };
+    } catch (error) {
+      updateUIStatus(uiContainer, `Error: ${error.message}`, true);
+      updateProgress(uiContainer, -1);
+      console.error('Error processing Coursera answers:', error);
+      return { success: false, error: error.message };
+    }
+  }
 })();
