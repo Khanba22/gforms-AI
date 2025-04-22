@@ -374,7 +374,7 @@
 
     indicator.style.zIndex = "2";
     indicator.style.pointerEvents = "none";
-
+    // A random Comment
     // Add strong box-shadow for more visibility
     element.style.position = "relative";
 
